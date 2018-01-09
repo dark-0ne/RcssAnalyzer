@@ -7,34 +7,51 @@ from tkinter import filedialog
 #### Functions
 ####################
 def _quit():
-    win.quit()
-    win.destroy()
+    main_win.quit()
+    main_win.destroy()
     exit()
 
 def _open_log_file():
+
     analyzer = alz.Analyzer()
-    analyzer.rcgPath = filedialog.askopenfilename()
+    analyzer.xmlPath = filedialog.askopenfilename(filetypes=(("XML Game Files", "*.xml"), ("all files", "*.*")),
+                                                  initialdir=".", title="Select XML File")
+    analyzer.logPath = filedialog.askopenfilename(filetypes=(("Log Files", "*.rcl"), ("all files", "*.*")),
+                                                  initialdir=".", title="Select Log File")
     analyzer.extract_rcg_file()
+    analyzer.extract_log_file()
     tmpLeft, tmpRight = analyzer.analyze_possession()
     total = tmpLeft + tmpRight
-    global possessionLeft, possessionRight
+
     possessionLeft.set(str(100 * tmpLeft / total)[:5]+' %')
     possessionRight.set(str(100 * tmpRight/total)[:5]+' %')
 
-    global teamNameLeft, teamNameRight
     teamNameLeft.set(analyzer.teams['Left']['Name'])
     teamNameRight.set(analyzer.teams['Right']['Name'])
 
-    global goalsLeft, goalsRight
     goalsLeft.set(str(analyzer.teams['Left']['Score']))
     goalsRight.set(str(analyzer.teams['Right']['Score']))
 
-    global staminaLeft, staminaRight
-    tmpLeft,tmpRight = analyzer.analyze_stamina()
+    tmpLeft, tmpRight = analyzer.analyze_stamina()
     staminaLeft.set(str(tmpLeft))
     staminaRight.set(str(tmpRight))
 
-    analyzer.analyze_passess()
+    tmpCompletedLeft, tmpCompletedRight, tmpWrongLeft, tmpWrongRight, tmpLeftShoots, tmpRightShoots = analyzer.analyze_kicks()
+
+    totalLeft = tmpCompletedLeft + tmpWrongLeft;
+    totalRight = tmpCompletedRight + tmpWrongRight
+
+    passesLeft.set(str(totalLeft)+' ('+str(tmpCompletedLeft)+')')
+    passesRight.set(str(totalRight) + ' (' + str(tmpCompletedRight) + ')')
+
+    passAccLeft.set(str(100 * tmpCompletedLeft / totalLeft)[:5]+' %')
+    passAccRight.set(str(100 * tmpCompletedRight / totalRight)[:5]+' %')
+
+    shotsLeft.set(str(tmpLeftShoots))
+    shotsRight.set(str(tmpRightShoots))
+
+    shotAccLeft.set(str(100 * analyzer.teams['Left']['Score'] / (analyzer.teams['Left']['Score'] + tmpLeftShoots))[:5]+' %')
+    shotAccRight.set(str(100 * analyzer.teams['Right']['Score'] / (analyzer.teams['Right']['Score'] + tmpRightShoots))[:5]+' %')
 
 
 
@@ -43,15 +60,15 @@ def _open_log_file():
 ###################
 
 ## Create Window
-win = tk.Tk()
+main_win = tk.Tk()
 
-win.title("RCSS Analyzer")
-win.minsize(height=300, width=360)
-win.resizable(0, 0)
+main_win.title("RCSS Analyzer")
+main_win.minsize(height=300, width=360)
+main_win.resizable(0, 0)
 ## Add Menu
 
 menuBar = Menu()
-win.config(menu=menuBar)
+main_win.config(menu=menuBar)
 
 ## Add File Menu
 
@@ -70,7 +87,7 @@ helpMenu.add_command(label='About')
 menuBar.add_cascade(label='Help', menu=helpMenu)
 
 ## Tab Control
-tabControl = ttk.Notebook(win)
+tabControl = ttk.Notebook(main_win)
 
 statsTab = ttk.Frame(tabControl)
 tabControl.add(statsTab, text='Stats')
@@ -92,17 +109,17 @@ ttk.Label(main_frame, text='Right').grid(column=2, row=0)
 
 MAX_LABEL_WIDTH = 20
 
-ttk.Label(main_frame, text='Team Name',width=MAX_LABEL_WIDTH).grid(column=0, row=1)
-ttk.Label(main_frame, text='Possession',width=MAX_LABEL_WIDTH).grid(column=0, row=2)
-ttk.Label(main_frame, text='Goals',width=MAX_LABEL_WIDTH).grid(column=0, row=3)
-ttk.Label(main_frame, text='Shots',width=MAX_LABEL_WIDTH).grid(column=0, row=4)
-ttk.Label(main_frame, text='Shot Accuracy',width=MAX_LABEL_WIDTH).grid(column=0, row=5)
-ttk.Label(main_frame, text='Passes',width=MAX_LABEL_WIDTH).grid(column=0, row=6)
-ttk.Label(main_frame, text='Pass Accuracy',width=MAX_LABEL_WIDTH).grid(column=0, row=7)
-ttk.Label(main_frame, text='Opportunities',width=MAX_LABEL_WIDTH).grid(column=0, row=8)
-ttk.Label(main_frame, text='Saves',width=MAX_LABEL_WIDTH).grid(column=0, row=9)
-ttk.Label(main_frame, text='Clearances',width=MAX_LABEL_WIDTH).grid(column=0, row=10)
-ttk.Label(main_frame, text='Avg. Stamina',width=MAX_LABEL_WIDTH).grid(column=0, row=11)
+ttk.Label(main_frame, text='Team Name', width=MAX_LABEL_WIDTH).grid(column=0, row=1)
+ttk.Label(main_frame, text='Possession', width=MAX_LABEL_WIDTH).grid(column=0, row=2)
+ttk.Label(main_frame, text='Goals', width=MAX_LABEL_WIDTH).grid(column=0, row=3)
+ttk.Label(main_frame, text='Out of bound Shoots', width=MAX_LABEL_WIDTH).grid(column=0, row=4)
+ttk.Label(main_frame, text='Shoot Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=5)
+ttk.Label(main_frame, text='Passes (Completed)', width=MAX_LABEL_WIDTH).grid(column=0, row=6)
+ttk.Label(main_frame, text='Pass Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=7)
+ttk.Label(main_frame, text='Opportunities', width=MAX_LABEL_WIDTH).grid(column=0, row=8)
+ttk.Label(main_frame, text='Saves', width=MAX_LABEL_WIDTH).grid(column=0, row=9)
+ttk.Label(main_frame, text='Clearances', width=MAX_LABEL_WIDTH).grid(column=0, row=10)
+ttk.Label(main_frame, text='Avg. Stamina', width=MAX_LABEL_WIDTH).grid(column=0, row=11)
 
 #### Text Entries
 
@@ -204,4 +221,4 @@ staminaRightEntry.grid(column=2, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx
 
 ## Start GUI
 
-win.mainloop()
+main_win.mainloop()
