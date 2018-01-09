@@ -13,7 +13,7 @@ def _quit():
 
 def _open_log_file():
     analyzer = alz.Analyzer()
-    analyzer.set_rcg_file(filedialog.askopenfilename())
+    analyzer.rcgPath = filedialog.askopenfilename()
     analyzer.extract_rcg_file()
     tmpLeft, tmpRight = analyzer.analyze_possession()
     total = tmpLeft + tmpRight

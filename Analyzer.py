@@ -5,12 +5,10 @@ import math
 
 class Analyzer:
     def __init__(self):
+        self.logPath = None
         self.rcgPath = None
-        self.cycles = None
+        self.cycles = pd.DataFrame(columns=["Left", "Right", "Ball", "Kick"], index=np.arange(6000))
         self.teams = {}
-
-    def set_rcg_file(self, path):
-        self.rcgPath = path
 
     def dist(self,x1,y1,x2,y2):
         return math.sqrt((x1-x2)**2+(y1-y2)**2)
@@ -43,13 +41,12 @@ class Analyzer:
             return np.argmin(dist_left)+1
         elif min_left > min_right and min_right < 6:
             # print('Cycle {} closest player is Right {} with distance = {}'.format(cycle, np.argmin(dist_right)+12, min_right))
-            return np.argmin(dist_right)+12
+            return -(np.argmin(dist_right)+1)
         else:
             # print('Cycle {} no one is in possession'.format(cycle))
             return 0
 
     def extract_rcg_file(self):
-        self.cycles = pd.DataFrame(columns=["Left", "Right", "Ball"], index=np.arange(6000))
         tree = et.parse(self.rcgPath)
         root = tree.getroot()
         for node in root:
@@ -60,9 +57,10 @@ class Analyzer:
                     self.teams['Right'] = {'Name':node.attrib['Name'],'Score':int(node.attrib['Goals'])}
 
             elif node.tag == 'Cycle':
-                self.cycles.iloc[int(node.attrib['Number']) - 1]['Left'] = []
-                self.cycles.iloc[int(node.attrib['Number']) - 1]['Right'] = []
                 current_cycle = self.cycles.iloc[int(node.attrib['Number']) - 1]
+                current_cycle['Left'] = []
+                current_cycle['Right'] = []
+
                 for movable in node:
                     if movable.tag == 'Ball':
                         current_cycle['Ball'] = movable.attrib
@@ -71,6 +69,29 @@ class Analyzer:
                             current_cycle['Left'].append(movable.attrib)
                         else:
                             current_cycle['Right'].append(movable.attrib)
+
+
+    def extract_log_file(self):
+        file = open(self.logPath, 'r')
+        left_name = self.teams['Left']['Name']
+
+        for line in file:
+            if line.find('(kick ') != -1:
+                splited = line.split()
+                cycle = int(splited[0].split(',')[0])
+                if splited[2].split('_')[0] == left_name:
+                    player = {'Side':'Left', 'Unum':int(splited[2].split('_')[1][:-1])}
+                else:
+                    player = {'Side':'Right', 'Unum':int(splited[2].split('_')[1][:-1])}
+                kick = {'Power':float(splited[4]), 'Angle':float(splited[5].split(')(')[0])}
+
+                current_cycle = self.cycles.iloc[cycle-1]
+
+                current_cycle['Kick'] = player
+                current_cycle['Kick'].update(kick)
+
+                # print(current_cycle['Kick'])
+
 
     def analyze_possession(self):
         left_possess_count = 0
@@ -81,9 +102,9 @@ class Analyzer:
         for i in range(6000):
             closest_player = self.find_player_in_possess(i + 1)
             possess_series[i] = closest_player
-            if closest_player < 12 and closest_player != 0:
+            if closest_player > 0:
                 left_possess_count += 1
-            elif closest_player > 11 and closest_player != 0:
+            elif closest_player < 0:
                 right_possess_count += 1
 
         self.cycles = self.cycles.assign(Owner=possess_series)
@@ -105,18 +126,56 @@ class Analyzer:
 
         # print('Left Stamina is {} and Right Stamina is {}'.format(totalLeft,totalRight))
         return totalLeft/65989, totalRight/65989
+
+
     def analyze_passess(self):
         previous_owner = 0
+
+        left_complete_passes = 0
+        right_complete_passes = 0
+
+        left_wrong_passes = 0
+        right_wrong_passes = 0
+
         for idx, row in self.cycles.iterrows():
             current_owner = row['Owner']
-            if current_owner != previous_owner:
-                print("Owner Changed!")
-                if math.fabs(current_owner-previous_owner) > 10:
-                    print("Team Also Changed!")
-            previous_owner = current_owner
+            if current_owner != previous_owner and current_owner != 0:
+                for cycle in range(idx-1, idx-26, -1):
+                    check_cycle = self.cycles.iloc[cycle]
+                    if type(check_cycle['Kick']) == dict:
+                        check_player = check_cycle['Kick']['Unum']
+                        if check_cycle['Kick']['Side'] == 'Right':
+                            check_player = -check_player
+                        if check_player == previous_owner:
+                            # print('Pass detected!')
+                            if current_owner * previous_owner < 0:
+                                if previous_owner > 0:
+                                    # print("Wrong Pass For Left")
+                                    left_wrong_passes += 1
+                                elif previous_owner < 0:
+                                    # print("Wrong Pass For Right")
+                                    right_wrong_passes += 1
+                            elif current_owner * previous_owner > 0:
+                                if previous_owner > 0:
+                                    # print("Complete Pass For Left")
+                                    left_complete_passes += 1
+                                elif previous_owner < 0:
+                                    # print("Complete Pass For Right")
+                                    right_complete_passes += 1
+                            break
+                previous_owner = current_owner
+
+
+        # print('Left complete passes count is {} and wrong passes count is {}'.format(left_complete_passes, left_wrong_passes))
+        # print('Right complete passes count is {} and wrong passes count is {}'.format(right_complete_passes, right_wrong_passes))
+
+        return left_complete_passes,left_wrong_passes,right_complete_passes,right_wrong_passes
+
 if __name__ == '__main__':
     analyzer = Analyzer()
-    analyzer.set_rcg_file('gamefile.xml')
+    analyzer.rcgPath = 'testGameFile.xml'
+    analyzer.logPath = 'testLogFile.rcl'
     analyzer.extract_rcg_file()
+    analyzer.extract_log_file()
     analyzer.analyze_possession()
     analyzer.analyze_passess()
