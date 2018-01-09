@@ -76,14 +76,18 @@ class Analyzer:
         left_possess_count = 0
         right_possess_count = 0
 
+        possess_series = pd.Series(np.arange(6000))
+
         for i in range(6000):
             closest_player = self.find_player_in_possess(i + 1)
+            possess_series[i] = closest_player
             if closest_player < 12 and closest_player != 0:
                 left_possess_count += 1
             elif closest_player > 11 and closest_player != 0:
                 right_possess_count += 1
 
-        print('Left Possession is {} and Right Possession is {}'.format(left_possess_count, right_possess_count))
+        self.cycles = self.cycles.assign(Owner=possess_series)
+        # print('Left Possession is {} and Right Possession is {}'.format(left_possess_count, right_possess_count))
 
         return left_possess_count, right_possess_count
 
@@ -99,11 +103,20 @@ class Analyzer:
                     totalRight += float(player['Stamina'])
 
 
-        print('Left Stamina is {} and Right Stamina is {}'.format(totalLeft,totalRight))
-
+        # print('Left Stamina is {} and Right Stamina is {}'.format(totalLeft,totalRight))
         return totalLeft/65989, totalRight/65989
-
+    def analyze_passess(self):
+        previous_owner = 0
+        for idx, row in self.cycles.iterrows():
+            current_owner = row['Owner']
+            if current_owner != previous_owner:
+                print("Owner Changed!")
+                if math.fabs(current_owner-previous_owner) > 10:
+                    print("Team Also Changed!")
+            previous_owner = current_owner
 if __name__ == '__main__':
     analyzer = Analyzer()
-    analyzer.set_rcg_file('C:/Users/MSI/Documents/Python Scripts/RcssAnalyzer/gamefile.xml')
+    analyzer.set_rcg_file('gamefile.xml')
     analyzer.extract_rcg_file()
+    analyzer.analyze_possession()
+    analyzer.analyze_passess()

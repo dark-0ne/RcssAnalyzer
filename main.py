@@ -34,6 +34,8 @@ def _open_log_file():
     staminaLeft.set(str(tmpLeft))
     staminaRight.set(str(tmpRight))
 
+    analyzer.analyze_passess()
+
 
 
 ###################
