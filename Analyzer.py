@@ -1,13 +1,13 @@
 import pandas as pd
 import numpy as np
-import xml.etree.ElementTree as Et
+import xml.etree.cElementTree as Et
 import math
 
 
 class Analyzer:
     def __init__(self):
-        self.logPath = None
-        self.xmlPath = None
+        self.logPath = ''
+        self.xmlPath = ''
         self.cycles = pd.DataFrame(columns=["Left", "Right", "Ball", "Kick"], index=np.arange(6000))
         self.teams = {}
 
