@@ -220,7 +220,7 @@ class Analyzer:
             if current_opp == 0:
                 if owner > 0 and ball_pos_x < 52 and ball_pos_x > 32 and math.fabs(ball_pos_y) < 20:
                     current_opp = 1
-                    left_opps +=1
+                    left_opps += 1
                     logging.debug('Cycle {}: Left gained opportunity!'.format(idx))
 
                 elif owner < 0 and ball_pos_x > -52 and ball_pos_x < -32 and math.fabs(ball_pos_y) < 20:

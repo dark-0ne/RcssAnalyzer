@@ -67,6 +67,14 @@ def _open_log_file():
     shotAccRight.set(str(100 * analyzer.teams['Right']['Score'] /
                         (analyzer.teams['Right']['Score'] + tmpRightShoots))[:5]+' %')
 
+    left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
+
+    opportunitiesLeft.set(str(left_opps))
+    opportunitiesRight.set(str(right_opps))
+
+    clearancesLeft.set(str(left_clear))
+    clearancesRight.set(str(right_clear))
+
 
 def _save_results():
 
