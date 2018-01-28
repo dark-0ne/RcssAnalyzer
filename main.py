@@ -45,8 +45,8 @@ def _open_log_file():
     goalsRight.set(str(analyzer.teams['Right']['Score']))
 
     tmpLeft, tmpRight = analyzer.analyze_stamina()
-    staminaLeft.set(str(tmpLeft))
-    staminaRight.set(str(tmpRight))
+    staminaLeft.set(str(tmpLeft)[:6])
+    staminaRight.set(str(tmpRight)[:6])
 
     tmpCompletedLeft, tmpCompletedRight, tmpWrongLeft, tmpWrongRight, tmpLeftShoots, tmpRightShoots = analyzer.analyze_kicks()
 

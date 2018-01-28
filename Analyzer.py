@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import xml.etree.cElementTree as Et
 import math
+import sympy as sp
 
 
 class Analyzer:
@@ -183,6 +184,36 @@ class Analyzer:
         return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes, left_wrong_shoots,\
             right_wrong_shoots
 
+    def analyze_opportunities(self):
+
+        left_opps = 0
+        right_opps = 0
+
+        current_opp = 0
+
+        for idx, row in self.cycles.iterrows():
+            try:
+                ball_pos_x = float(row['Ball']['PosX'])
+                ball_pos_y = float(row['Ball']['PosY'])
+            except TypeError:
+                pass
+            print(idx)
+            if current_opp == 0:
+                if row['Owner'] > 0 and ball_pos_x < 52 and ball_pos_x > 32 and math.fabs(ball_pos_y) < 20:
+                    current_opp = 1
+                    left_opps +=1
+                    print('Cycle {}: Left gained opportunity!'.format(idx))
+
+                elif row['Owner'] < 0 and ball_pos_x > -52 and ball_pos_x < -32 and math.fabs(ball_pos_y) < 20:
+                    current_opp = -1
+                    right_opps += 1
+                    print('Cycle {}: Right gained opportunity!'.format(idx))
+            elif current_opp * row['Owner'] == -1:
+                current_opp = 0
+                print("Cycle {}: Opportunity Over!".format(idx))
+
+        return left_opps, right_opps
+
 
 if __name__ == '__main__':
     analyzer = Analyzer()
@@ -191,4 +222,8 @@ if __name__ == '__main__':
     analyzer.extract_rcg_file()
     analyzer.extract_log_file()
     analyzer.analyze_possession()
-    analyzer.analyze_kicks()
+    # analyzer.analyze_kicks()
+
+    left,right = analyzer.analyze_opportunities()
+
+    print(left,right)
