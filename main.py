@@ -45,8 +45,8 @@ def _open_log_file():
     goalsRight.set(str(analyzer.teams['Right']['Score']))
 
     tmpLeft, tmpRight = analyzer.analyze_stamina()
-    staminaLeft.set(str(tmpLeft))
-    staminaRight.set(str(tmpRight))
+    staminaLeft.set(str(tmpLeft)[:6])
+    staminaRight.set(str(tmpRight)[:6])
 
     tmpCompletedLeft, tmpCompletedRight, tmpWrongLeft, tmpWrongRight, tmpLeftShoots, tmpRightShoots = analyzer.analyze_kicks()
 
@@ -66,6 +66,14 @@ def _open_log_file():
                         (analyzer.teams['Left']['Score'] + tmpLeftShoots))[:5]+' %')
     shotAccRight.set(str(100 * analyzer.teams['Right']['Score'] /
                         (analyzer.teams['Right']['Score'] + tmpRightShoots))[:5]+' %')
+
+    left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
+
+    opportunitiesLeft.set(str(left_opps))
+    opportunitiesRight.set(str(right_opps))
+
+    clearancesLeft.set(str(left_clear))
+    clearancesRight.set(str(right_clear))
 
 
 def _save_results():
@@ -141,7 +149,7 @@ def _open_results():
 
 
 def _show_about():
-    msg.showinfo('About', "Developed in KN2C® Robotics Lab \t 2018")
+    msg.showinfo('About', "Developed in KN2C® Robotics Lab 2018")
 
 ###################
 # Procedural Code
