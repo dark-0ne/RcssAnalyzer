@@ -3,7 +3,7 @@ import numpy as np
 import xml.etree.cElementTree as Et
 import math
 import sympy as sp
-
+import logging
 
 class Analyzer:
     def __init__(self):
@@ -17,37 +17,41 @@ class Analyzer:
         return math.sqrt((x1-x2)**2+(y1-y2)**2)
 
     def find_player_in_possess(self, cycle):
-        if cycle == 3000:
-            return 0
-        current_cycle = self.cycles.iloc[cycle - 1].copy()
-        dist_left = np.array([])
-        dist_right = np.array([])
-        for player in current_cycle['Left']:
-            tmp = np.array([self.dist(float(player['PosX']), float(player['PosY']), float(current_cycle['Ball']['PosX'])
+        try:
+            current_cycle = self.cycles.iloc[cycle - 1].copy()
+            dist_left = np.array([])
+            dist_right = np.array([])
+            cur_ball = current_cycle['Ball']
+
+            ball_fac = self.dist(float(cur_ball['VelX']), float(cur_ball['VelX']), 0,0)
+            ball_fac += 1
+            ball_fac = 1/ball_fac
+            for player in current_cycle['Left']:
+                tmp = np.array([self.dist(float(player['PosX']), float(player['PosY']), float(current_cycle['Ball']['PosX'])
                                       , float(current_cycle['Ball']['PosY']))])
 
-            dist_left = np.concatenate((dist_left, tmp))
-        for player in current_cycle['Right']:
-            tmp = np.array([self.dist(float(player['PosX']), float(player['PosY']), float(current_cycle['Ball']['PosX'])
+                dist_left = np.concatenate((dist_left, tmp))
+            for player in current_cycle['Right']:
+                tmp = np.array([self.dist(float(player['PosX']), float(player['PosY']), float(current_cycle['Ball']['PosX'])
                                       , float(current_cycle['Ball']['PosY']))])
-            dist_right = np.concatenate((dist_right, tmp))
+                dist_right = np.concatenate((dist_right, tmp))
 
-        min_left = np.amin(dist_left)
-        min_right = np.amin(dist_right)
+            min_left = np.amin(dist_left)
+            min_right = np.amin(dist_right)
 
-        if math.fabs(min_left-min_right) < 0.3:
-            # print('Cycle {} no one is in possession'.format(cycle))
-            return 0
-        elif min_left < min_right and min_left < 6:
-            # print('Cycle {} closest player is Left {} with distance = {}'
-            # .format(cycle, np.argmin(dist_left)+1, min_left))
-            return np.argmin(dist_left)+1
-        elif min_left > min_right and min_right < 6:
-            # print('Cycle {} closest player is Right {} with distance = {}'
-            # .format(cycle, np.argmin(dist_right)+12, min_right))
-            return -(np.argmin(dist_right)+1)
-        else:
-            # print('Cycle {} no one is in possession'.format(cycle))
+            if min_left < min_right and min_left < (1.1 + ball_fac):
+                logging.debug('Cycle {} closest player is Left {} with distance = {}'
+                .format(cycle, np.argmin(dist_left)+1, min_left))
+                return np.argmin(dist_left)+1
+            elif min_left > min_right and min_right < (1.1 + ball_fac):
+                logging.debug('Cycle {} closest player is Right {} with distance = {}'
+                .format(cycle, np.argmin(dist_right)+12, min_right))
+                return -(np.argmin(dist_right)+1)
+            else:
+                logging.debug('Cycle {} no one is in possession'.format(cycle))
+                return 0
+
+        except TypeError:
             return 0
 
     def extract_rcg_file(self):
@@ -93,24 +97,36 @@ class Analyzer:
                 current_cycle['Kick'] = player
                 current_cycle['Kick'].update(kick)
 
-                # print(current_cycle['Kick'])
+                logging.debug(current_cycle['Kick'])
 
     def analyze_possession(self):
         left_possess_count = 0
         right_possess_count = 0
 
+        two_cycles_ago = 0
+        one_cycle_ago = 0
+
         possess_series = pd.Series(np.arange(6000))
 
         for i in range(6000):
             closest_player = self.find_player_in_possess(i + 1)
-            possess_series[i] = closest_player
-            if closest_player > 0:
+            if two_cycles_ago == one_cycle_ago:
+                if one_cycle_ago == closest_player:
+                    possess_series[i] = closest_player
+                else:
+                    possess_series[i] = one_cycle_ago
+            else:
+                possess_series[i] = 0
+            if possess_series[i] > 0:
                 left_possess_count += 1
-            elif closest_player < 0:
+            elif possess_series[i] < 0:
                 right_possess_count += 1
 
+            two_cycles_ago = one_cycle_ago
+            one_cycle_ago = closest_player
+
         self.cycles = self.cycles.assign(Owner=possess_series)
-        # print('Left Possession is {} and Right Possession is {}'.format(left_possess_count, right_possess_count))
+        logging.debug('Left Possession is {} and Right Possession is {}'.format(left_possess_count, right_possess_count))
 
         return left_possess_count, right_possess_count
 
@@ -125,7 +141,7 @@ class Analyzer:
                 for player in row['Right']:
                     total_right += float(player['Stamina'])
 
-        # print('Left Stamina is {} and Right Stamina is {}'.format(total_left,total_right))
+        logging.debug('Left Stamina is {} and Right Stamina is {}'.format(total_left,total_right))
         return total_left/65989, total_right/65989
 
     def analyze_kicks(self):
@@ -150,44 +166,47 @@ class Analyzer:
                         if check_cycle['Kick']['Side'] == 'Right':
                             check_player = -check_player
                         if check_player == previous_owner:
-                            # print('Pass detected!')
+                            logging.debug('Pass detected!')
                             if current_owner * previous_owner < 0:
                                 if previous_owner > 0:
                                     if math.fabs(current_owner) == 1:
-                                        # print("Wrong Shoot For Left at cycle {}".format(cycle))
+                                        logging.debug("Wrong Shoot For Left at cycle {}".format(cycle))
                                         left_wrong_shoots += 1
                                     else:
-                                        # print("Wrong Pass For Left")
+                                        logging.debug("Wrong Pass For Left")
                                         left_wrong_passes += 1
                                 elif previous_owner < 0:
                                     if math.fabs(current_owner) == 1:
-                                        # print("Wrong Shoot For Right at cycle {}".format(cycle))
+                                        logging.debug("Wrong Shoot For Right at cycle {}".format(cycle))
                                         right_wrong_shoots += 1
                                     else:
-                                        # print("Wrong Pass For Right")
+                                        logging.debug("Wrong Pass For Right")
                                         right_wrong_passes += 1
                             elif current_owner * previous_owner > 0:
                                 if previous_owner > 0:
-                                    # print("Complete Pass For Left")
+                                    logging.debug("Complete Pass For Left")
                                     left_complete_passes += 1
                                 elif previous_owner < 0:
-                                    # print("Complete Pass For Right")
+                                    logging.debug("Complete Pass For Right")
                                     right_complete_passes += 1
                             break
                 previous_owner = current_owner
 
-        # print('Left complete passes count is {} and wrong passes count is {}'
-        # .format(left_complete_passes, left_wrong_passes))
-        # print('Right complete passes count is {} and wrong passes count is {}'
-        # .format(right_complete_passes, right_wrong_passes))
+        logging.debug('Left complete passes count is {} and wrong passes count is {}'
+        .format(left_complete_passes, left_wrong_passes))
+        logging.debug('Right complete passes count is {} and wrong passes count is {}'
+        .format(right_complete_passes, right_wrong_passes))
 
         return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes, left_wrong_shoots,\
             right_wrong_shoots
 
-    def analyze_opportunities(self):
+    def analyze_opportunities_and_clearances(self):
 
         left_opps = 0
         right_opps = 0
+
+        left_clearance = 0
+        right_clearance = 0
 
         current_opp = 0
 
@@ -195,27 +214,44 @@ class Analyzer:
             try:
                 ball_pos_x = float(row['Ball']['PosX'])
                 ball_pos_y = float(row['Ball']['PosY'])
+                owner = row['Owner']
             except TypeError:
-                pass
-            print(idx)
+                continue
             if current_opp == 0:
-                if row['Owner'] > 0 and ball_pos_x < 52 and ball_pos_x > 32 and math.fabs(ball_pos_y) < 20:
+                if owner > 0 and ball_pos_x < 52 and ball_pos_x > 32 and math.fabs(ball_pos_y) < 20:
                     current_opp = 1
                     left_opps +=1
-                    print('Cycle {}: Left gained opportunity!'.format(idx))
+                    logging.debug('Cycle {}: Left gained opportunity!'.format(idx))
 
-                elif row['Owner'] < 0 and ball_pos_x > -52 and ball_pos_x < -32 and math.fabs(ball_pos_y) < 20:
+                elif owner < 0 and ball_pos_x > -52 and ball_pos_x < -32 and math.fabs(ball_pos_y) < 20:
                     current_opp = -1
                     right_opps += 1
-                    print('Cycle {}: Right gained opportunity!'.format(idx))
-            elif current_opp * row['Owner'] == -1:
+                    logging.debug('Cycle {}: Right gained opportunity!'.format(idx))
+            elif current_opp * row['Owner'] < 0:
                 current_opp = 0
-                print("Cycle {}: Opportunity Over!".format(idx))
+                logging.debug("Cycle {}: Opportunity Over!".format(idx))
 
-        return left_opps, right_opps
+                if owner > 1:       # Left Defender
+                    player_pos_x = float(row['Left'][owner - 1]['PosX'])
+                    player_pos_y = float(row['Left'][owner - 1]['PosY'])
+                    if (player_pos_x > -52 and player_pos_x < -32 and math.fabs(player_pos_y) < 20
+                            and math.fabs(ball_pos_x) != 47 and math.fabs(ball_pos_y) != 9.16):      # Left Clearance
+                        logging.warning('Left recovered at cycle {}'.format(idx))
+                        left_clearance += 1
+
+                if owner < -1:       # Right Defender
+                    player_pos_x = float(row['Right'][int(math.fabs(owner)) - 1]['PosX'])
+                    player_pos_y = float(row['Right'][int(math.fabs(owner)) - 1]['PosY'])
+                    if (player_pos_x < 52 and player_pos_x > 32 and math.fabs(player_pos_y) < 20
+                            and math.fabs(ball_pos_x) != 47 and math.fabs(ball_pos_y) != 9.16):      # Right Clearance
+                        logging.warning('Right recovered at cycle {}'.format(idx))
+                        right_clearance += 1
+
+        return left_opps, right_opps, left_clearance, right_clearance
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.WARNING)
     analyzer = Analyzer()
     analyzer.xmlPath = 'testGameFile.xml'
     analyzer.logPath = 'testLogFile.rcl'
@@ -224,6 +260,6 @@ if __name__ == '__main__':
     analyzer.analyze_possession()
     # analyzer.analyze_kicks()
 
-    left,right = analyzer.analyze_opportunities()
+    one, two, left, right = analyzer.analyze_opportunities_and_clearances()
 
-    print(left,right)
+    print(left, right)

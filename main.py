@@ -141,7 +141,7 @@ def _open_results():
 
 
 def _show_about():
-    msg.showinfo('About', "Developed in KN2C® Robotics Lab \t 2018")
+    msg.showinfo('About', "Developed in KN2C® Robotics Lab 2018")
 
 ###################
 # Procedural Code
