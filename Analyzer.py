@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import xml.etree.cElementTree as Et
 import math
-import sympy as sp
 import logging
+import shapely
+from shapely.geometry import LineString
+from shapely.geometry import Point
 
 class Analyzer:
     def __init__(self):
@@ -109,21 +111,28 @@ class Analyzer:
         possess_series = pd.Series(np.arange(6000))
 
         for i in range(6000):
-            closest_player = self.find_player_in_possess(i + 1)
-            if two_cycles_ago == one_cycle_ago:
-                if one_cycle_ago == closest_player:
-                    possess_series[i] = closest_player
-                else:
-                    possess_series[i] = one_cycle_ago
-            else:
-                possess_series[i] = 0
+            possess_series[i] = 0
+            had_kick = False
+            if i > 10:
+                for cycle_to_check in (reversed(range(i-3, i+1))):
+                    kick = self.cycles.iloc[cycle_to_check]['Kick']
+
+                    try:
+                        if kick['Side'] == 'Left':
+                            possess_series[i] = kick['Unum']
+                        else:
+                            possess_series[i] = -kick['Unum']
+                        had_kick = True
+                        break
+                    except (AttributeError, TypeError):
+                        continue
+                if had_kick is False:
+                    possess_series[i] = self.find_player_in_possess(i + 1)
             if possess_series[i] > 0:
                 left_possess_count += 1
             elif possess_series[i] < 0:
                 right_possess_count += 1
-
-            two_cycles_ago = one_cycle_ago
-            one_cycle_ago = closest_player
+            logging.debug("Cycle {}: {} is in possession.".format(i, possess_series[i]))
 
         self.cycles = self.cycles.assign(Owner=possess_series)
         logging.debug('Left Possession is {} and Right Possession is {}'.format(left_possess_count, right_possess_count))
@@ -153,52 +162,177 @@ class Analyzer:
         left_wrong_passes = 0
         right_wrong_passes = 0
 
+        left_correct_shoots = 0
+        right_correct_shoots = 0
+
         left_wrong_shoots = 0
         right_wrong_shoots = 0
 
-        for idx, row in self.cycles.iterrows():
-            current_owner = row['Owner']
-            if current_owner != previous_owner and current_owner != 0:
-                for cycle in range(idx-1, idx-26, -1):
-                    check_cycle = self.cycles.iloc[cycle]
-                    if type(check_cycle['Kick']) == dict:
-                        check_player = check_cycle['Kick']['Unum']
-                        if check_cycle['Kick']['Side'] == 'Right':
-                            check_player = -check_player
-                        if check_player == previous_owner:
-                            logging.debug('Pass detected!')
-                            if current_owner * previous_owner < 0:
-                                if previous_owner > 0:
-                                    if math.fabs(current_owner) == 1:
-                                        logging.debug("Wrong Shoot For Left at cycle {}".format(cycle))
-                                        left_wrong_shoots += 1
-                                    else:
-                                        logging.debug("Wrong Pass For Left")
-                                        left_wrong_passes += 1
-                                elif previous_owner < 0:
-                                    if math.fabs(current_owner) == 1:
-                                        logging.debug("Wrong Shoot For Right at cycle {}".format(cycle))
-                                        right_wrong_shoots += 1
-                                    else:
-                                        logging.debug("Wrong Pass For Right")
-                                        right_wrong_passes += 1
-                            elif current_owner * previous_owner > 0:
-                                if previous_owner > 0:
-                                    logging.debug("Complete Pass For Left")
-                                    left_complete_passes += 1
-                                elif previous_owner < 0:
-                                    logging.debug("Complete Pass For Right")
-                                    right_complete_passes += 1
-                            break
-                previous_owner = current_owner
+        left_passer_pos = []
+        right_passer_pos = []
 
+        for idx, row in self.cycles[self.cycles['Kick'].notnull()].iterrows():
+            try:
+                kick = row['Kick']
+                logging.debug('Cycle {} {}'.format(idx+1, kick))
+                current_owner = kick['Unum']
+                if kick['Side'] == 'Right':
+                    current_owner *= -1
+                next_owner = 0
+                target_cycle = 0
+                for i in range(idx+1, min(idx+150, 5999)):
+                    temp_owner = self.cycles.iloc[i]['Owner']
+                    if i-idx > 3 and temp_owner == current_owner:
+                        logging.debug('Self pass detected at {}!'.format(i + 1))
+                        break
+                    elif temp_owner != 0 and temp_owner != current_owner:
+                        next_owner = temp_owner
+                        logging.debug('Change of Possession at {} from {} to {}!'.format(i + 1, current_owner, next_owner))
+                        target_cycle = i
+                        break
+
+                if next_owner * current_owner < 0:
+
+                    # Checking for shoots
+                    if current_owner > 0:   # Left Player
+                        player_pos = (
+                            float(row['Left'][current_owner - 1]['PosX']),
+                            float(row['Left'][current_owner - 1]['PosY']))
+
+                        logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
+
+                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
+                        next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                    ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                        kick_projection = LineString([ball_pos, next_pos])
+                        goal_line = LineString([(52.5, 7), (52.5, -7)])
+
+                        inter = goal_line.intersection(kick_projection)
+                        if not inter.is_empty:
+                            logging.debug('Left Correct Shoot at: {}'.format(idx))
+                            left_correct_shoots += 1
+                            continue
+                        else:
+                            goal_line = LineString([(52.5, 11), (52.5, -11)])
+
+                            inter = goal_line.intersection(kick_projection)
+                            if not inter.is_empty:
+                                logging.debug('Left Wrong Shoot at: {}'.format(idx))
+                                left_wrong_shoots += 1
+                                continue
+                        left_wrong_passes += 1
+                        logging.debug('Wrong left pass at {}'.format(idx))
+                        continue
+
+                    else:   # Right Player
+                        player_pos = (
+                            float(row['Right'][-current_owner - 1]['PosX']),
+                            float(row['Right'][-current_owner - 1]['PosY']))
+
+                        logging.debug('Player Right {} position is {}'.format(current_owner, player_pos))
+
+                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
+                        next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                    ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                        kick_projection = LineString([ball_pos, next_pos])
+                        goal_line = LineString([(-52.5, 7), (-52.5, -7)])
+
+                        inter = goal_line.intersection(kick_projection)
+                        if not inter.is_empty:
+                            logging.debug('Right Correct Shoot at: {}'.format(idx))
+                            right_correct_shoots += 1
+                            continue
+                        else:
+                            goal_line = LineString([(-52.5, 11), (-52.5, -11)])
+
+                            inter = goal_line.intersection(kick_projection)
+                            if not inter.is_empty:
+                                logging.debug('Right Wrong Shoot at: {}'.format(idx))
+                                right_wrong_shoots += 1
+                                continue
+                        right_wrong_passes += 1
+                        logging.debug('Wrong right pass at {}'.format(idx))
+                        continue
+
+                elif next_owner * current_owner > 0:
+                    # Checking for passes
+
+                    if current_owner > 0:  # Left Player
+                        player_pos = (
+                            float(row['Left'][current_owner - 1]['PosX']),
+                            float(row['Left'][current_owner - 1]['PosY']))
+
+                        logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
+
+                        target_pos = (float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosX']),
+                                      float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosY']))
+
+                        logging.debug(
+                            'Target position is {}.'.format(target_pos))
+                        target_circle = Point(target_pos).buffer(2.5).boundary
+                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
+                        next_pos = (ball_pos[0] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                    ball_pos[1] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                        kick_projection = LineString([ball_pos, next_pos])
+                        logging.debug("Next pos is {}".format(next_pos))
+
+                        inter = target_circle.intersection(kick_projection)
+                        if not inter.is_empty:
+                            logging.debug('Left correct pass at: {}'.format(inter))
+                            left_complete_passes += 1
+                            left_passer_pos.append(player_pos)
+                            continue
+                        else:
+                            logging.debug('Anomaly at {}'.format(idx))
+                            continue
+
+                    else:  # Right Player
+                            player_pos = (
+                                float(row['Right'][-current_owner - 1]['PosX']),
+                                float(row['Right'][-current_owner - 1]['PosY']))
+
+                            # print(kick_projection)
+                            logging.debug('Player right {} position is {}'.format(current_owner, player_pos))
+
+                            target_pos = (float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosX']),
+                                          float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosY']))
+
+                            logging.debug(
+                                'Target position is {}.'.format(target_pos))
+                            target_circle = Point(target_pos).buffer(2.5).boundary
+                            ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                        float(self.cycles.iloc[idx]['Ball']['PosY']))
+                            next_pos = (ball_pos[0] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                        ball_pos[1] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                            kick_projection = LineString([ball_pos, next_pos])
+                            logging.debug("Next pos is {}".format(next_pos))
+
+                            inter = target_circle.intersection(kick_projection)
+                            if not inter.is_empty:
+                                logging.debug('Right correct pass at: {}'.format(inter))
+                                right_complete_passes += 1
+                                right_passer_pos.append(player_pos)
+                                continue
+                            else:
+                                logging.debug('Anomaly at {}'.format(idx))
+                            continue
+            except TypeError:
+                continue
         logging.debug('Left complete passes count is {} and wrong passes count is {}'
-        .format(left_complete_passes, left_wrong_passes))
+            .format(left_complete_passes, left_wrong_passes))
         logging.debug('Right complete passes count is {} and wrong passes count is {}'
-        .format(right_complete_passes, right_wrong_passes))
+            .format(right_complete_passes, right_wrong_passes))
 
-        return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes, left_wrong_shoots,\
-            right_wrong_shoots
+        logging.debug('Left correct shoot count is {} and wrong shoot count is {}'
+                        .format(left_correct_shoots, left_wrong_shoots))
+        logging.debug('Right correct shoot count is {} and wrong shoot count is {}'
+                        .format(right_correct_shoots, right_wrong_shoots))
+
+        return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes,left_correct_shoots,\
+               left_wrong_shoots,right_correct_shoots, right_wrong_shoots, left_passer_pos, right_passer_pos
 
     def analyze_opportunities_and_clearances(self):
 
@@ -236,7 +370,7 @@ class Analyzer:
                     player_pos_y = float(row['Left'][owner - 1]['PosY'])
                     if (player_pos_x > -52 and player_pos_x < -32 and math.fabs(player_pos_y) < 20
                             and math.fabs(ball_pos_x) != 47 and math.fabs(ball_pos_y) != 9.16):      # Left Clearance
-                        logging.warning('Left recovered at cycle {}'.format(idx))
+                        logging.debug('Left recovered at cycle {}'.format(idx))
                         left_clearance += 1
 
                 if owner < -1:       # Right Defender
@@ -244,7 +378,7 @@ class Analyzer:
                     player_pos_y = float(row['Right'][int(math.fabs(owner)) - 1]['PosY'])
                     if (player_pos_x < 52 and player_pos_x > 32 and math.fabs(player_pos_y) < 20
                             and math.fabs(ball_pos_x) != 47 and math.fabs(ball_pos_y) != 9.16):      # Right Clearance
-                        logging.warning('Right recovered at cycle {}'.format(idx))
+                        logging.debug('Right recovered at cycle {}'.format(idx))
                         right_clearance += 1
 
         return left_opps, right_opps, left_clearance, right_clearance
@@ -258,8 +392,6 @@ if __name__ == '__main__':
     analyzer.extract_rcg_file()
     analyzer.extract_log_file()
     analyzer.analyze_possession()
-    # analyzer.analyze_kicks()
+    analyzer.analyze_kicks()
+    # analyzer.analyze_opportunities_and_clearances()
 
-    one, two, left, right = analyzer.analyze_opportunities_and_clearances()
-
-    print(left, right)
