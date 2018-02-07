@@ -11,6 +11,10 @@ from tkinter import filedialog
 ####################
 
 
+def _create_circle(x, y, r):
+    return (x-r, y-r, x+r, y+r)
+
+
 def _quit():
     main_win.quit()
     main_win.destroy()
@@ -48,24 +52,32 @@ def _open_log_file():
     staminaLeft.set(str(tmpLeft)[:6])
     staminaRight.set(str(tmpRight)[:6])
 
-    tmpCompletedLeft, tmpCompletedRight, tmpWrongLeft, tmpWrongRight, tmpLeftShoots, tmpRightShoots = analyzer.analyze_kicks()
+    CompletedLeftPasses, WrongLeftPasses, CompletedRight,\
+    WrongRight, LeftCorrectShoots,LeftWrongShoots,\
+    RightCorrectShoots, RightWrongShoots, LeftPasserPos, RightPasserPos = analyzer.analyze_kicks()
 
-    totalLeft = tmpCompletedLeft + tmpWrongLeft
-    totalRight = tmpCompletedRight + tmpWrongRight
+    totalLeftPasses = CompletedLeftPasses + WrongLeftPasses
+    totalRightPasses = CompletedRight + WrongRight
 
-    passesLeft.set(str(totalLeft)+' ('+str(tmpCompletedLeft)+')')
-    passesRight.set(str(totalRight) + ' (' + str(tmpCompletedRight) + ')')
+    totalLeftShoots = LeftCorrectShoots + LeftWrongShoots
+    totalRightShoots = RightCorrectShoots + RightWrongShoots
 
-    passAccLeft.set(str(100 * tmpCompletedLeft / totalLeft)[:5]+' %')
-    passAccRight.set(str(100 * tmpCompletedRight / totalRight)[:5]+' %')
+    passesLeft.set(str(totalLeftPasses)+' ('+str(CompletedLeftPasses)+')')
+    passesRight.set(str(totalRightPasses) + ' (' + str(CompletedRight) + ')')
 
-    shotsLeft.set(str(tmpLeftShoots))
-    shotsRight.set(str(tmpRightShoots))
+    passAccLeft.set(str(100 * CompletedLeftPasses / totalLeftPasses)[:5]+' %')
+    passAccRight.set(str(100 * CompletedRight / totalRightPasses)[:5]+' %')
 
-    shotAccLeft.set(str(100 * analyzer.teams['Left']['Score'] /
-                        (analyzer.teams['Left']['Score'] + tmpLeftShoots))[:5]+' %')
-    shotAccRight.set(str(100 * analyzer.teams['Right']['Score'] /
-                        (analyzer.teams['Right']['Score'] + tmpRightShoots))[:5]+' %')
+    shotsLeft.set(str(totalLeftShoots)+' ('+str(LeftWrongShoots)+')')
+    shotsRight.set(str(totalRightShoots)+' ('+str(RightWrongShoots)+')')
+
+    shotAccLeft.set(str(100 * LeftCorrectShoots / totalLeftShoots)[:5]+' %')
+    shotAccRight.set(str(100 * RightCorrectShoots / totalRightShoots)[:5]+' %')
+
+    for passer in LeftPasserPos:
+        canvas.create_oval(_create_circle((passer[0] + 52.5) * x_bound/125 + (canvas_width - x_bound), (passer[1] + 34) * y_bound / 75 + (canvas_height - y_bound), x_bound*0.01), fill='#ed0017')
+    for passer in RightPasserPos:
+        canvas.create_oval(_create_circle((passer[0] + 52.5) * x_bound/125 + (canvas_width - x_bound), (passer[1] + 34) * y_bound / 75 + (canvas_height - y_bound), x_bound*0.01), fill='#220ef9')
 
     left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
 
@@ -208,7 +220,7 @@ MAX_LABEL_WIDTH = 20
 ttk.Label(main_frame, text='Team Name', width=MAX_LABEL_WIDTH).grid(column=0, row=1)
 ttk.Label(main_frame, text='Possession', width=MAX_LABEL_WIDTH).grid(column=0, row=2)
 ttk.Label(main_frame, text='Goals', width=MAX_LABEL_WIDTH).grid(column=0, row=3)
-ttk.Label(main_frame, text='Out of bound Shoots', width=MAX_LABEL_WIDTH).grid(column=0, row=4)
+ttk.Label(main_frame, text='Shoots (Out)', width=MAX_LABEL_WIDTH).grid(column=0, row=4)
 ttk.Label(main_frame, text='Shoot Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=5)
 ttk.Label(main_frame, text='Passes (Completed)', width=MAX_LABEL_WIDTH).grid(column=0, row=6)
 ttk.Label(main_frame, text='Pass Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=7)
@@ -312,8 +324,31 @@ staminaRight = tk.StringVar()
 staminaRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaRight, state='readonly')
 staminaRightEntry.grid(column=2, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
+graphFrame = ttk.LabelFrame(graphTab, text='Graphical Visualization')
+graphFrame.grid(column=0, row=0, padx=8, pady=4)
+
+canvas_width = 320
+canvas_height = 250
+
+canvas = tk.Canvas(graphFrame, width=canvas_width, height=canvas_height)
+canvas.pack()
+
+ttk.Label(graphFrame, text='Red = Left', width=MAX_LABEL_WIDTH).pack()
+ttk.Label(graphFrame, text='Blue = Right', width=MAX_LABEL_WIDTH).pack()
 
 
+x_bound = canvas_width * 90 / 100
+y_bound = canvas_height * 90 / 100
+
+canvas.create_rectangle(0, 0, canvas_width, canvas_height, fill='#12ce1e')
+canvas.create_rectangle(canvas_width - x_bound, canvas_height-y_bound, x_bound, y_bound)
+canvas.create_line(canvas_width/2, canvas_height - y_bound,canvas_width/2,y_bound, fill="#000000")
+canvas.create_oval(_create_circle(canvas_width/2, canvas_height/2, x_bound*10/100))
+canvas.create_rectangle(canvas_width - x_bound, canvas_height/2 + y_bound * 10 / 100, canvas_width - 1.05 * x_bound, canvas_height/2 - y_bound * 10 / 100, fill="#000000")
+canvas.create_rectangle(x_bound, canvas_height/2 + y_bound * 10 / 100, 1.05 * x_bound, canvas_height/2 - y_bound * 10 / 100, fill="#000000")
+
+canvas.create_rectangle(canvas_width - x_bound, canvas_height/2 + y_bound * 25 / 100, canvas_width - 0.85 * x_bound, canvas_height/2 - y_bound * 25 / 100)
+canvas.create_rectangle(x_bound, canvas_height/2 + y_bound * 25 / 100, 0.85 * x_bound, canvas_height/2 - y_bound * 25 / 100)
 
 ## Start GUI
 
