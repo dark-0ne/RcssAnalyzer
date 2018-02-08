@@ -168,8 +168,8 @@ class Analyzer:
         left_wrong_shoots = 0
         right_wrong_shoots = 0
 
-        left_passer_pos = []
-        right_passer_pos = []
+        left_pass_pos = []
+        right_pass_pos = []
 
         for idx, row in self.cycles[self.cycles['Kick'].notnull()].iterrows():
             try:
@@ -283,7 +283,7 @@ class Analyzer:
                         if not inter.is_empty:
                             logging.debug('Left correct pass at: {}'.format(inter))
                             left_complete_passes += 1
-                            left_passer_pos.append(player_pos)
+                            left_pass_pos.append((player_pos,target_pos))
                             continue
                         else:
                             logging.debug('Anomaly at {}'.format(idx))
@@ -314,7 +314,7 @@ class Analyzer:
                             if not inter.is_empty:
                                 logging.debug('Right correct pass at: {}'.format(inter))
                                 right_complete_passes += 1
-                                right_passer_pos.append(player_pos)
+                                right_pass_pos.append((player_pos,target_pos))
                                 continue
                             else:
                                 logging.debug('Anomaly at {}'.format(idx))
@@ -332,7 +332,7 @@ class Analyzer:
                         .format(right_correct_shoots, right_wrong_shoots))
 
         return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes,left_correct_shoots,\
-               left_wrong_shoots,right_correct_shoots, right_wrong_shoots, left_passer_pos, right_passer_pos
+               left_wrong_shoots, right_correct_shoots, right_wrong_shoots, left_pass_pos, right_pass_pos
 
     def analyze_opportunities_and_clearances(self):
 

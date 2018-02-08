@@ -7,12 +7,19 @@ from tkinter import ttk
 from tkinter import filedialog
 
 ####################
+# Globals
+####################
+
+left_passes_pos = []
+right_passes_pos = []
+
+####################
 # Functions
 ####################
 
 
 def _create_circle(x, y, r):
-    return (x-r, y-r, x+r, y+r)
+    return x-r, y-r, x+r, y+r
 
 
 def _quit():
@@ -21,7 +28,26 @@ def _quit():
     exit()
 
 
+def draw_field():
+    canvas.delete("all")
+    canvas.create_rectangle(0, 0, canvas_width, canvas_height, fill='#12ce1e')  # Background
+    canvas.create_rectangle(x_start, y_start, x_end, y_end)  # Outer Field
+    canvas.create_line(canvas_width / 2, y_start, canvas_width / 2, y_end, fill="#000000")  # Middle Line
+    canvas.create_oval(_create_circle(canvas_width / 2, canvas_height / 2, x_bound * 12 / 100))  # Middle Circle
+    canvas.create_rectangle(x_start, canvas_height / 2 + y_bound * 10 / 100, x_start - x_bound * 0.05,
+                            canvas_height / 2 - y_bound * 10 / 100, fill="#000000")  # Left Goal
+    canvas.create_rectangle(x_end, canvas_height / 2 + y_bound * 10 / 100, x_bound * 0.05 + x_end,
+                            canvas_height / 2 - y_bound * 10 / 100, fill="#000000")  # Right Goal
+
+    canvas.create_rectangle(x_start, canvas_height / 2 + y_bound * 27.5 / 100, x_start + 0.2 * x_bound,
+                            canvas_height / 2 - y_bound * 27.5 / 100)  # Left Danger zone
+    canvas.create_rectangle(x_end, canvas_height / 2 + y_bound * 27.5 / 100, x_end - 0.2 * x_bound,
+                            canvas_height / 2 - y_bound * 27.5 / 100)  # Right Danger zone
+
+
 def _open_log_file():
+
+    global left_passes_pos, right_passes_pos
 
     analyzer = Alz.Analyzer()
     analyzer.xmlPath = filedialog.askopenfilename(filetypes=(("XML Game Files", "*.xml"), ("all files", "*.*")),
@@ -54,7 +80,7 @@ def _open_log_file():
 
     CompletedLeftPasses, WrongLeftPasses, CompletedRight,\
     WrongRight, LeftCorrectShoots,LeftWrongShoots,\
-    RightCorrectShoots, RightWrongShoots, LeftPasserPos, RightPasserPos = analyzer.analyze_kicks()
+    RightCorrectShoots, RightWrongShoots, left_passes_pos, right_passes_pos = analyzer.analyze_kicks()
 
     totalLeftPasses = CompletedLeftPasses + WrongLeftPasses
     totalRightPasses = CompletedRight + WrongRight
@@ -74,11 +100,6 @@ def _open_log_file():
     shotAccLeft.set(str(100 * LeftCorrectShoots / totalLeftShoots)[:5]+' %')
     shotAccRight.set(str(100 * RightCorrectShoots / totalRightShoots)[:5]+' %')
 
-    for passer in LeftPasserPos:
-        canvas.create_oval(_create_circle((passer[0] + 52.5) * x_bound/125 + (canvas_width - x_bound), (passer[1] + 34) * y_bound / 75 + (canvas_height - y_bound), x_bound*0.01), fill='#ed0017')
-    for passer in RightPasserPos:
-        canvas.create_oval(_create_circle((passer[0] + 52.5) * x_bound/125 + (canvas_width - x_bound), (passer[1] + 34) * y_bound / 75 + (canvas_height - y_bound), x_bound*0.01), fill='#220ef9')
-
     left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
 
     opportunitiesLeft.set(str(left_opps))
@@ -86,6 +107,44 @@ def _open_log_file():
 
     clearancesLeft.set(str(left_clear))
     clearancesRight.set(str(right_clear))
+
+
+def draw_left_passes():
+    draw_field()
+    for item in left_passes_pos:
+        canvas.create_oval(
+            _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_bound * 0.01), fill='#ff0010')
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#1749ed', width=3)
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#1749ed', width=3)
+        canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
+                           width=2, dash=(5, 3))
+
+
+def draw_right_passes():
+    draw_field()
+    for item in right_passes_pos:
+        canvas.create_oval(
+            _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_bound * 0.01), fill='#ff0010')
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#1749ed', width=3)
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#1749ed', width=3)
+        canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
+                           width=2, dash=(5, 3))
 
 
 def _save_results():
@@ -168,10 +227,13 @@ def _show_about():
 ###################
 
 ## Create Window
+WINDOW_WIDTH = 720
+WINDOW_HEIGHT = 600
+
 main_win = tk.Tk()
 
 main_win.title("RCSS Analyzer")
-main_win.minsize(height=300, width=360)
+main_win.minsize(height=WINDOW_HEIGHT, width=WINDOW_WIDTH)
 main_win.resizable(0, 0)
 ## Add Menu
 
@@ -215,140 +277,141 @@ main_frame.grid(column=0, row=0, padx=8, pady=4)
 ttk.Label(main_frame, text='Left').grid(column=1, row=0)
 ttk.Label(main_frame, text='Right').grid(column=2, row=0)
 
-MAX_LABEL_WIDTH = 20
+MAX_LABEL_WIDTH = 15
 
-ttk.Label(main_frame, text='Team Name', width=MAX_LABEL_WIDTH).grid(column=0, row=1)
-ttk.Label(main_frame, text='Possession', width=MAX_LABEL_WIDTH).grid(column=0, row=2)
-ttk.Label(main_frame, text='Goals', width=MAX_LABEL_WIDTH).grid(column=0, row=3)
-ttk.Label(main_frame, text='Shoots (Out)', width=MAX_LABEL_WIDTH).grid(column=0, row=4)
-ttk.Label(main_frame, text='Shoot Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=5)
-ttk.Label(main_frame, text='Passes (Completed)', width=MAX_LABEL_WIDTH).grid(column=0, row=6)
-ttk.Label(main_frame, text='Pass Accuracy', width=MAX_LABEL_WIDTH).grid(column=0, row=7)
-ttk.Label(main_frame, text='Opportunities', width=MAX_LABEL_WIDTH).grid(column=0, row=8)
-ttk.Label(main_frame, text='Saves', width=MAX_LABEL_WIDTH).grid(column=0, row=9)
-ttk.Label(main_frame, text='Clearances', width=MAX_LABEL_WIDTH).grid(column=0, row=10)
-ttk.Label(main_frame, text='Avg. Stamina', width=MAX_LABEL_WIDTH).grid(column=0, row=11)
+ttk.Label(main_frame, text='Team Name', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=1)
+ttk.Label(main_frame, text='Possession', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=2)
+ttk.Label(main_frame, text='Goals', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=3)
+ttk.Label(main_frame, text='Shoots (Out)', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=4)
+ttk.Label(main_frame, text='Shoot Accuracy', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=5)
+ttk.Label(main_frame, text='Passes (Completed)', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=6)
+ttk.Label(main_frame, text='Pass Accuracy', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=7)
+ttk.Label(main_frame, text='Opportunities', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=8)
+ttk.Label(main_frame, text='Saves', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=9)
+ttk.Label(main_frame, text='Clearances', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=10)
+ttk.Label(main_frame, text='Avg. Stamina', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=11)
 
 #### Text Entries
 
-MAX_ENTRY_WIDTH = 12
-ENTRY_IPADY = 5
-ENTRY_PADY = 3
-ENTRY_PADX = 5
+MAX_ENTRY_WIDTH = 14
+ENTRY_IPADY = 7
+ENTRY_PADY = 5
+ENTRY_PADX = 7
 
 teamNameLeft = tk.StringVar()
-teamNameLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=teamNameLeft, state='readonly')
+teamNameLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=teamNameLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 teamNameLeftEntry.grid(column=1, row=1,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 teamNameRight = tk.StringVar()
-teamNameRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=teamNameRight, state='readonly')
+teamNameRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=teamNameRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 teamNameRightEntry.grid(column=2, row=1,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 possessionLeft = tk.StringVar()
-possessionLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=possessionLeft, state='readonly')
+possessionLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=possessionLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 possessionLeftEntry.grid(column=1, row=2,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 possessionRight = tk.StringVar()
-possessionRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=possessionRight, state='readonly')
+possessionRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=possessionRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 possessionRightEntry.grid(column=2, row=2,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 goalsLeft = tk.StringVar()
-goalsLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=goalsLeft, state='readonly')
+goalsLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=goalsLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 goalsLeftEntry.grid(column=1, row=3,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 goalsRight = tk.StringVar()
-goalsRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=goalsRight, state='readonly')
+goalsRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=goalsRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 goalsRightEntry.grid(column=2, row=3,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 shotsLeft = tk.StringVar()
-shotsLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotsLeft, state='readonly')
+shotsLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotsLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 shotsLeftEntry.grid(column=1, row=4,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 shotsRight = tk.StringVar()
-shotsRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotsRight, state='readonly')
+shotsRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotsRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 shotsRightEntry.grid(column=2, row=4,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 shotAccLeft = tk.StringVar()
-shotAccLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotAccLeft, state='readonly')
+shotAccLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotAccLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 shotAccLeftEntry.grid(column=1, row=5,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 shotAccRight = tk.StringVar()
-shotAccRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotAccRight, state='readonly')
+shotAccRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=shotAccRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 shotAccRightEntry.grid(column=2, row=5,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 passesLeft = tk.StringVar()
-passesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passesLeft, state='readonly')
+passesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passesLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 passesLeftEntry.grid(column=1, row=6,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 passesRight = tk.StringVar()
-passesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passesRight, state='readonly')
+passesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passesRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 passesRightEntry.grid(column=2, row=6,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 passAccLeft = tk.StringVar()
-passAccLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passAccLeft, state='readonly')
+passAccLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passAccLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 passAccLeftEntry.grid(column=1, row=7,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 passAccRight = tk.StringVar()
-passAccRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passAccRight, state='readonly')
+passAccRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=passAccRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 passAccRightEntry.grid(column=2, row=7,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 opportunitiesLeft = tk.StringVar()
-opportunitiesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=opportunitiesLeft, state='readonly')
+opportunitiesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=opportunitiesLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 opportunitiesLeftEntry.grid(column=1, row=8,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 opportunitiesRight = tk.StringVar()
-opportunitiesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=opportunitiesRight, state='readonly')
+opportunitiesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=opportunitiesRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 opportunitiesRightEntry.grid(column=2, row=8,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 savesLeft = tk.StringVar()
-savesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=savesLeft, state='readonly')
+savesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=savesLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 savesLeftEntry.grid(column=1, row=9,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 savesRight = tk.StringVar()
-savesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=savesRight, state='readonly')
+savesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=savesRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 savesRightEntry.grid(column=2, row=9,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 clearancesLeft = tk.StringVar()
-clearancesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=clearancesLeft, state='readonly')
+clearancesLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=clearancesLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 clearancesLeftEntry.grid(column=1, row=10,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 clearancesRight = tk.StringVar()
-clearancesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=clearancesRight, state='readonly')
+clearancesRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=clearancesRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 clearancesRightEntry.grid(column=2, row=10,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 staminaLeft = tk.StringVar()
-staminaLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaLeft, state='readonly')
+staminaLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 staminaLeftEntry.grid(column=1, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 staminaRight = tk.StringVar()
-staminaRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaRight, state='readonly')
+staminaRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 staminaRightEntry.grid(column=2, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 graphFrame = ttk.LabelFrame(graphTab, text='Graphical Visualization')
 graphFrame.grid(column=0, row=0, padx=8, pady=4)
 
-canvas_width = 320
-canvas_height = 250
+canvas_width = WINDOW_WIDTH
+canvas_height = WINDOW_HEIGHT * 5 / 6
 
 canvas = tk.Canvas(graphFrame, width=canvas_width, height=canvas_height)
 canvas.pack()
 
-ttk.Label(graphFrame, text='Red = Left', width=MAX_LABEL_WIDTH).pack()
-ttk.Label(graphFrame, text='Blue = Right', width=MAX_LABEL_WIDTH).pack()
+ttk.Label(graphFrame, text='Show passes for team: ', font=("Courier 10 Pitch", 16)).pack()
+ttk.Button(graphFrame, text='Left', command=draw_left_passes,).pack()
+ttk.Button(graphFrame, text='Right', command=draw_right_passes).pack()
+ttk.Label(graphFrame, text='Red circles show passers,', font=("Courier 10 Pitch", 16)).pack()
+ttk.Label(graphFrame, text='Blue crosses are receivers.', font=("Courier 10 Pitch", 16)).pack()
 
 
 x_bound = canvas_width * 90 / 100
 y_bound = canvas_height * 90 / 100
 
-canvas.create_rectangle(0, 0, canvas_width, canvas_height, fill='#12ce1e')
-canvas.create_rectangle(canvas_width - x_bound, canvas_height-y_bound, x_bound, y_bound)
-canvas.create_line(canvas_width/2, canvas_height - y_bound,canvas_width/2,y_bound, fill="#000000")
-canvas.create_oval(_create_circle(canvas_width/2, canvas_height/2, x_bound*10/100))
-canvas.create_rectangle(canvas_width - x_bound, canvas_height/2 + y_bound * 10 / 100, canvas_width - 1.05 * x_bound, canvas_height/2 - y_bound * 10 / 100, fill="#000000")
-canvas.create_rectangle(x_bound, canvas_height/2 + y_bound * 10 / 100, 1.05 * x_bound, canvas_height/2 - y_bound * 10 / 100, fill="#000000")
+x_start = (canvas_width - x_bound)/2
+y_start = (canvas_height - y_bound)/2
 
-canvas.create_rectangle(canvas_width - x_bound, canvas_height/2 + y_bound * 25 / 100, canvas_width - 0.85 * x_bound, canvas_height/2 - y_bound * 25 / 100)
-canvas.create_rectangle(x_bound, canvas_height/2 + y_bound * 25 / 100, 0.85 * x_bound, canvas_height/2 - y_bound * 25 / 100)
+x_end = (canvas_width - x_bound)/2 + x_bound
+y_end = (canvas_height - y_bound)/2 + y_bound
+
+draw_field()
 
 ## Start GUI
 
