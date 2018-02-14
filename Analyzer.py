@@ -11,7 +11,7 @@ class Analyzer:
     def __init__(self):
         self.logPath = ''
         self.xmlPath = ''
-        self.cycles = pd.DataFrame(columns=["Left", "Right", "Ball", "Kick"], index=np.arange(6000))
+        self.cycles = pd.DataFrame(columns=["Left", "Right", "Ball", "Kick", "Tackle"], index=np.arange(6000))
         self.teams = {}
 
     @staticmethod
@@ -62,9 +62,13 @@ class Analyzer:
         for node in root:
             if node.tag == 'Team':
                 if node.attrib['Side'] == 'Left':
-                    self.teams['Left'] = {'Name': node.attrib['Name'], 'Score': int(node.attrib['Goals'])}
+                    self.teams['Left'] = {'Name': node.attrib['Name'], 'Score': int(node.attrib['Score']), 'Goals': []}
+                    for goal in node:
+                        self.teams['Left']['Goals'].append({'Cycle': int(goal.text)})
                 else:
-                    self.teams['Right'] = {'Name': node.attrib['Name'], 'Score': int(node.attrib['Goals'])}
+                    self.teams['Right'] = {'Name': node.attrib['Name'], 'Score': int(node.attrib['Score']), 'Goals': []}
+                    for goal in node:
+                        self.teams['Right']['Goals'].append({'Cycle': int(goal.text)})
 
             elif node.tag == 'Cycle':
                 current_cycle = self.cycles.iloc[int(node.attrib['Number']) - 1]
@@ -79,6 +83,18 @@ class Analyzer:
                             current_cycle['Left'].append(movable.attrib)
                         else:
                             current_cycle['Right'].append(movable.attrib)
+        start_cycle = self.cycles.iloc[30]
+        for i in range(10):
+            if -52 < float(start_cycle['Left'][i]['PosX']) < - 36 and -20 < float(start_cycle['Left'][i]['PosY']) < 20:
+                self.teams['Left'].update({'Goalkeeper': i+1})
+                break
+        for i in range(10):
+            if 36 < float(start_cycle['Right'][i]['PosX']) < 52 and -20 < float(start_cycle['Right'][i]['PosY']) < 20:
+                self.teams['Right'].update({'Goalkeeper': i+1})
+                break
+        logging.debug(self.teams)
+
+
 
     def extract_log_file(self):
         file = open(self.logPath, 'r')
@@ -100,6 +116,17 @@ class Analyzer:
                 current_cycle['Kick'].update(kick)
 
                 logging.debug(current_cycle['Kick'])
+            elif line.find('(tackle ') != -1:
+                splited = line.split()
+                cycle = int(splited[0].split(',')[0])
+                if splited[2].split('_')[0] == left_name:
+                    player = {'Side': 'Left', 'Unum': int(splited[2].split('_')[1][:-1])}
+                else:
+                    player = {'Side': 'Right', 'Unum': int(splited[2].split('_')[1][:-1])}
+                current_cycle = self.cycles.iloc[cycle - 1]
+                current_cycle['Tackle'] = player
+                logging.debug(current_cycle['Tackle'])
+
 
     def analyze_possession(self):
         left_possess_count = 0
@@ -171,134 +198,129 @@ class Analyzer:
         left_pass_pos = []
         right_pass_pos = []
 
+        left_saves = 0
+        right_saves = 0
+
         for idx, row in self.cycles[self.cycles['Kick'].notnull()].iterrows():
             try:
+                self_pass = False
                 kick = row['Kick']
-                logging.debug('Cycle {} {}'.format(idx+1, kick))
-                current_owner = kick['Unum']
-                if kick['Side'] == 'Right':
-                    current_owner *= -1
-                next_owner = 0
-                target_cycle = 0
-                for i in range(idx+1, min(idx+150, 5999)):
-                    temp_owner = self.cycles.iloc[i]['Owner']
-                    if i-idx > 3 and temp_owner == current_owner:
-                        logging.debug('Self pass detected at {}!'.format(i + 1))
+                for i in range(idx + 1, min(idx + 30, 5999)):
+                    next_kick = self.cycles.iloc[i]['Kick']
+                    if type(next_kick) == dict:
+                        if next_kick['Side'] == kick['Side'] and next_kick['Unum'] == kick['Unum']:
+                            logging.debug('Self pass detected at {}!'.format(idx))
+                            self_pass = True
                         break
-                    elif temp_owner != 0 and temp_owner != current_owner:
-                        next_owner = temp_owner
-                        logging.debug('Change of Possession at {} from {} to {}!'.format(i + 1, current_owner, next_owner))
-                        target_cycle = i
-                        break
+                if not self_pass:
+                    logging.debug('Cycle {} {}'.format(idx+1, kick))
+                    current_owner = kick['Unum']
+                    if kick['Side'] == 'Right':
+                        current_owner *= -1
+                    next_owner = 0
+                    target_cycle = 0
+                    for i in range(idx+1, min(idx+150, 5999)):
+                        temp_owner = self.cycles.iloc[i]['Owner']
+                        if temp_owner != 0 and temp_owner != current_owner:
+                            next_owner = temp_owner
+                            logging.debug('Change of possession at {} from {} to {}!'.format(i + 1, current_owner, next_owner))
+                            target_cycle = i
+                            break
 
-                if next_owner * current_owner < 0:
+                    if next_owner * current_owner < 0:
 
-                    # Checking for shoots
-                    if current_owner > 0:   # Left Player
-                        player_pos = (
-                            float(row['Left'][current_owner - 1]['PosX']),
-                            float(row['Left'][current_owner - 1]['PosY']))
+                        # Checking for shoots
+                        goal_scored = False
+                        if current_owner > 0:   # Left Player
+                            player_pos = (
+                                float(row['Left'][current_owner - 1]['PosX']),
+                                float(row['Left'][current_owner - 1]['PosY']))
 
-                        logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
+                            logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
 
-                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
-                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
-                        next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
-                                    ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
-                        kick_projection = LineString([ball_pos, next_pos])
-                        goal_line = LineString([(52.5, 7), (52.5, -7)])
-
-                        inter = goal_line.intersection(kick_projection)
-                        if not inter.is_empty:
-                            logging.debug('Left Correct Shoot at: {}'.format(idx))
-                            left_correct_shoots += 1
-                            continue
-                        else:
-                            goal_line = LineString([(52.5, 11), (52.5, -11)])
+                            ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                        float(self.cycles.iloc[idx]['Ball']['PosY']))
+                            next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                        ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                            kick_projection = LineString([ball_pos, next_pos])
+                            goal_line = LineString([(52.5, 7), (52.5, -7)])
 
                             inter = goal_line.intersection(kick_projection)
                             if not inter.is_empty:
-                                logging.debug('Left Wrong Shoot at: {}'.format(idx))
-                                left_wrong_shoots += 1
+                                logging.warning('Left correct shoot at: {}'.format(idx))
+                                left_correct_shoots += 1
+                                for goal in self.teams['Left']['Goals']:
+                                    if goal['Cycle']-idx < 30:
+                                        goal_scored = True
+                                        break
+                                if not goal_scored and math.fabs(next_owner) == self.teams['Right']['Goalkeeper']:
+                                    logging.warning('Right keeper save at:{}'.format(idx))
+                                    right_saves +=1
+
                                 continue
-                        left_wrong_passes += 1
-                        logging.debug('Wrong left pass at {}'.format(idx))
-                        continue
+                            else:
+                                goal_line = LineString([(52.5, 11), (52.5, -11)])
 
-                    else:   # Right Player
-                        player_pos = (
-                            float(row['Right'][-current_owner - 1]['PosX']),
-                            float(row['Right'][-current_owner - 1]['PosY']))
-
-                        logging.debug('Player Right {} position is {}'.format(current_owner, player_pos))
-
-                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
-                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
-                        next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
-                                    ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
-                        kick_projection = LineString([ball_pos, next_pos])
-                        goal_line = LineString([(-52.5, 7), (-52.5, -7)])
-
-                        inter = goal_line.intersection(kick_projection)
-                        if not inter.is_empty:
-                            logging.debug('Right Correct Shoot at: {}'.format(idx))
-                            right_correct_shoots += 1
-                            continue
-                        else:
-                            goal_line = LineString([(-52.5, 11), (-52.5, -11)])
-
-                            inter = goal_line.intersection(kick_projection)
-                            if not inter.is_empty:
-                                logging.debug('Right Wrong Shoot at: {}'.format(idx))
-                                right_wrong_shoots += 1
-                                continue
-                        right_wrong_passes += 1
-                        logging.debug('Wrong right pass at {}'.format(idx))
-                        continue
-
-                elif next_owner * current_owner > 0:
-                    # Checking for passes
-
-                    if current_owner > 0:  # Left Player
-                        player_pos = (
-                            float(row['Left'][current_owner - 1]['PosX']),
-                            float(row['Left'][current_owner - 1]['PosY']))
-
-                        logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
-
-                        target_pos = (float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosX']),
-                                      float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosY']))
-
-                        logging.debug(
-                            'Target position is {}.'.format(target_pos))
-                        target_circle = Point(target_pos).buffer(2.5).boundary
-                        ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
-                                    float(self.cycles.iloc[idx]['Ball']['PosY']))
-                        next_pos = (ball_pos[0] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
-                                    ball_pos[1] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
-                        kick_projection = LineString([ball_pos, next_pos])
-                        logging.debug("Next pos is {}".format(next_pos))
-
-                        inter = target_circle.intersection(kick_projection)
-                        if not inter.is_empty:
-                            logging.debug('Left correct pass at: {}'.format(inter))
-                            left_complete_passes += 1
-                            left_pass_pos.append((player_pos,target_pos))
-                            continue
-                        else:
-                            logging.debug('Anomaly at {}'.format(idx))
+                                inter = goal_line.intersection(kick_projection)
+                                if not inter.is_empty:
+                                    logging.warning('Left wrong shoot at: {}'.format(idx))
+                                    left_wrong_shoots += 1
+                                    continue
+                            if type(row['Tackle']) == float:
+                                left_wrong_passes += 1
+                                logging.warning('Wrong left pass at {}'.format(idx))
                             continue
 
-                    else:  # Right Player
+                        else:   # Right Player
                             player_pos = (
                                 float(row['Right'][-current_owner - 1]['PosX']),
                                 float(row['Right'][-current_owner - 1]['PosY']))
 
-                            # print(kick_projection)
                             logging.debug('Player right {} position is {}'.format(current_owner, player_pos))
 
-                            target_pos = (float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosX']),
-                                          float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosY']))
+                            ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                        float(self.cycles.iloc[idx]['Ball']['PosY']))
+                            next_pos = (ball_pos[0] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                        ball_pos[1] + 16 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                            kick_projection = LineString([ball_pos, next_pos])
+                            goal_line = LineString([(-52.5, 7), (-52.5, -7)])
+
+                            inter = goal_line.intersection(kick_projection)
+                            if not inter.is_empty:
+                                logging.warning('Right correct shoot at: {}'.format(idx))
+                                for goal in self.teams['Right']['Goals']:
+                                    if goal['Cycle']-idx < 30:
+                                        goal_scored = True
+                                        break
+                                if not goal_scored and math.fabs(next_owner) == self.teams['Left']['Goalkeeper']:
+                                    logging.warning('Left keeper save at:{}'.format(idx))
+                                    left_saves +=1
+                                continue
+                            else:
+                                goal_line = LineString([(-52.5, 11), (-52.5, -11)])
+
+                                inter = goal_line.intersection(kick_projection)
+                                if not inter.is_empty:
+                                    logging.warning('Right wrong shoot at: {}'.format(idx))
+                                    right_wrong_shoots += 1
+                                    continue
+                            if type(row['Tackle']) == float:
+                                right_wrong_passes += 1
+                                logging.warning('Right wrong pass at {}'.format(idx))
+                            continue
+
+                    elif next_owner * current_owner > 0:
+                        # Checking for passes
+
+                        if current_owner > 0:  # Left Player
+                            player_pos = (
+                                float(row['Left'][current_owner - 1]['PosX']),
+                                float(row['Left'][current_owner - 1]['PosY']))
+
+                            logging.debug('Player left {} position is {}'.format(current_owner, player_pos))
+
+                            target_pos = (float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosX']),
+                                          float(self.cycles.iloc[target_cycle]['Left'][next_owner - 1]['PosY']))
 
                             logging.debug(
                                 'Target position is {}.'.format(target_pos))
@@ -312,13 +334,44 @@ class Analyzer:
 
                             inter = target_circle.intersection(kick_projection)
                             if not inter.is_empty:
-                                logging.debug('Right correct pass at: {}'.format(inter))
-                                right_complete_passes += 1
-                                right_pass_pos.append((player_pos,target_pos))
+                                logging.warning('Left correct pass at: {}'.format(idx))
+                                left_complete_passes += 1
+                                left_pass_pos.append((player_pos,target_pos))
                                 continue
                             else:
-                                logging.debug('Anomaly at {}'.format(idx))
-                            continue
+                                logging.warning('Anomaly at {}'.format(idx))
+                                continue
+
+                        else:  # Right Player
+                                player_pos = (
+                                    float(row['Right'][-current_owner - 1]['PosX']),
+                                    float(row['Right'][-current_owner - 1]['PosY']))
+
+                                # print(kick_projection)
+                                logging.debug('Player right {} position is {}'.format(current_owner, player_pos))
+
+                                target_pos = (float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosX']),
+                                              float(self.cycles.iloc[target_cycle]['Right'][-next_owner - 1]['PosY']))
+
+                                logging.debug(
+                                    'Target position is {}.'.format(target_pos))
+                                target_circle = Point(target_pos).buffer(2.5).boundary
+                                ball_pos = (float(self.cycles.iloc[idx]['Ball']['PosX']),
+                                            float(self.cycles.iloc[idx]['Ball']['PosY']))
+                                next_pos = (ball_pos[0] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelX']),
+                                            ball_pos[1] + 12 * float(self.cycles.iloc[idx + 1]['Ball']['VelY']))
+                                kick_projection = LineString([ball_pos, next_pos])
+                                logging.debug("Next pos is {}".format(next_pos))
+
+                                inter = target_circle.intersection(kick_projection)
+                                if not inter.is_empty:
+                                    logging.warning('Right correct pass at: {}'.format(idx))
+                                    right_complete_passes += 1
+                                    right_pass_pos.append((player_pos,target_pos))
+                                    continue
+                                else:
+                                    logging.warning('Anomaly at {}'.format(idx))
+                                continue
             except TypeError:
                 continue
         logging.debug('Left complete passes count is {} and wrong passes count is {}'
@@ -331,8 +384,11 @@ class Analyzer:
         logging.debug('Right correct shoot count is {} and wrong shoot count is {}'
                         .format(right_correct_shoots, right_wrong_shoots))
 
-        return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes,left_correct_shoots,\
-               left_wrong_shoots, right_correct_shoots, right_wrong_shoots, left_pass_pos, right_pass_pos
+        logging.debug('Left saves are {} and right saves are {}'.format(left_saves, right_saves))
+
+        return left_complete_passes, left_wrong_passes, right_complete_passes, right_wrong_passes, left_correct_shoots,\
+               left_wrong_shoots, right_correct_shoots, right_wrong_shoots, left_pass_pos, right_pass_pos, left_saves,\
+               right_saves
 
     def analyze_opportunities_and_clearances(self):
 

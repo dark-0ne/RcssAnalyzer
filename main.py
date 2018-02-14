@@ -80,7 +80,7 @@ def _open_log_file():
 
     CompletedLeftPasses, WrongLeftPasses, CompletedRight,\
     WrongRight, LeftCorrectShoots,LeftWrongShoots,\
-    RightCorrectShoots, RightWrongShoots, left_passes_pos, right_passes_pos = analyzer.analyze_kicks()
+    RightCorrectShoots, RightWrongShoots, left_passes_pos, right_passes_pos, left_saves, right_saves = analyzer.analyze_kicks()
 
     totalLeftPasses = CompletedLeftPasses + WrongLeftPasses
     totalRightPasses = CompletedRight + WrongRight
@@ -107,6 +107,10 @@ def _open_log_file():
 
     clearancesLeft.set(str(left_clear))
     clearancesRight.set(str(right_clear))
+
+    savesLeft.set(str(left_saves))
+    savesRight.set(str(right_saves))
+
 
 
 def draw_left_passes():
@@ -227,7 +231,7 @@ def _show_about():
 ###################
 
 ## Create Window
-WINDOW_WIDTH = 720
+WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 
 main_win = tk.Tk()
@@ -277,7 +281,7 @@ main_frame.grid(column=0, row=0, padx=8, pady=4)
 ttk.Label(main_frame, text='Left').grid(column=1, row=0)
 ttk.Label(main_frame, text='Right').grid(column=2, row=0)
 
-MAX_LABEL_WIDTH = 15
+MAX_LABEL_WIDTH = 19.5
 
 ttk.Label(main_frame, text='Team Name', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=1)
 ttk.Label(main_frame, text='Possession', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=2)
