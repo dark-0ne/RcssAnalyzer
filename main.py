@@ -2,6 +2,8 @@ import tkinter as tk
 import Analyzer as Alz
 import xml.etree.cElementTree as Et
 import tkinter.messagebox as msg
+import os
+
 from tkinter import Menu
 from tkinter import ttk
 from tkinter import filedialog
@@ -10,8 +12,11 @@ from tkinter import filedialog
 # Globals
 ####################
 
-left_passes_pos = []
-right_passes_pos = []
+left_correct_pass_pos = []
+right_correct_pass_pos = []
+
+left_wrong_pass_pos = []
+right_wrong_pass_pos = []
 
 ####################
 # Functions
@@ -47,26 +52,36 @@ def draw_field():
 
 def _open_log_file():
 
-    global left_passes_pos, right_passes_pos
+    global left_correct_pass_pos, right_correct_pass_pos, left_wrong_pass_pos, right_wrong_pass_pos
+
+    pwd = os.getcwd()
+
+    rcg_path = filedialog.askopenfilename(filetypes=(("Server Game Files", "*.rcg"), ("Log Extractor Output File",
+                                                                                     "*.xml"), ("all files", "*.*")))
+    if rcg_path == '':
+        return
+
+    rcl_path = filedialog.askopenfilename(filetypes=(("Server Log Files", "*.rcl"), ("all files", "*.*")),
+                                          initialdir=".", title="Select Log File")
+    if rcl_path == '':
+        return
 
     analyzer = Alz.Analyzer()
-    analyzer.xmlPath = filedialog.askopenfilename(filetypes=(("XML Game Files", "*.xml"), ("all files", "*.*")),
-                                                  initialdir=".", title="Select XML File")
-    if analyzer.xmlPath == '':
-        return
 
-    analyzer.logPath = filedialog.askopenfilename(filetypes=(("Log Files", "*.rcl"), ("all files", "*.*")),
-                                                  initialdir=".", title="Select Log File")
-    if analyzer.logPath == '':
-        return
+    if rcg_path.split('.')[-1] == 'rcg':
+        os.system(pwd + '/Log-Extractor ' + rcg_path + " tmp.xml")
+        analyzer.xmlPath = pwd + "/tmp.xml"
+    else:
+        analyzer.xmlPath = rcg_path
 
+    analyzer.logPath = rcl_path
     analyzer.extract_rcg_file()
     analyzer.extract_log_file()
-    tmpLeft, tmpRight = analyzer.analyze_possession()
-    total = tmpLeft + tmpRight
+    left_possess_count, right_possess_count = analyzer.analyze_possession()
+    total_possess_count = left_possess_count + right_possess_count
 
-    possessionLeft.set(str(100 * tmpLeft / total)[:5]+' %')
-    possessionRight.set(str(100 * tmpRight/total)[:5]+' %')
+    possessionLeft.set(str(100 * left_possess_count / total_possess_count)[:5]+' %')
+    possessionRight.set(str(100 * right_possess_count/total_possess_count)[:5]+' %')
 
     teamNameLeft.set(analyzer.teams['Left']['Name'])
     teamNameRight.set(analyzer.teams['Right']['Name'])
@@ -74,31 +89,29 @@ def _open_log_file():
     goalsLeft.set(str(analyzer.teams['Left']['Score']))
     goalsRight.set(str(analyzer.teams['Right']['Score']))
 
-    tmpLeft, tmpRight = analyzer.analyze_stamina()
-    staminaLeft.set(str(tmpLeft)[:6])
-    staminaRight.set(str(tmpRight)[:6])
+    left_possess_count, right_possess_count = analyzer.analyze_stamina()
+    staminaLeft.set(str(left_possess_count)[:6])
+    staminaRight.set(str(right_possess_count)[:6])
 
-    CompletedLeftPasses, WrongLeftPasses, CompletedRight,\
-    WrongRight, LeftCorrectShoots,LeftWrongShoots,\
-    RightCorrectShoots, RightWrongShoots, left_passes_pos, right_passes_pos, left_saves, right_saves = analyzer.analyze_kicks()
+    analyzer.analyze_kicks()
 
-    totalLeftPasses = CompletedLeftPasses + WrongLeftPasses
-    totalRightPasses = CompletedRight + WrongRight
+    left_total_pass_count = analyzer.left_complete_pass_count + analyzer.left_wrong_pass_count
+    right_total_pass_count = analyzer.right_complete_pass_count + analyzer.right_wrong_pass_count
 
-    totalLeftShoots = LeftCorrectShoots + LeftWrongShoots
-    totalRightShoots = RightCorrectShoots + RightWrongShoots
+    left_total_shoot_count = analyzer.left_correct_shoot_count + analyzer.left_wrong_shoot_count
+    right_total_shoot_count = analyzer.right_correct_shoot_count + analyzer.right_wrong_shoot_count
 
-    passesLeft.set(str(totalLeftPasses)+' ('+str(CompletedLeftPasses)+')')
-    passesRight.set(str(totalRightPasses) + ' (' + str(CompletedRight) + ')')
+    passesLeft.set(str(left_total_pass_count) + ' (' + str(analyzer.left_complete_pass_count) + ')')
+    passesRight.set(str(right_total_pass_count) + ' (' + str(analyzer.right_complete_pass_count) + ')')
 
-    passAccLeft.set(str(100 * CompletedLeftPasses / totalLeftPasses)[:5]+' %')
-    passAccRight.set(str(100 * CompletedRight / totalRightPasses)[:5]+' %')
+    passAccLeft.set(str(100 * analyzer.left_complete_pass_count / left_total_pass_count)[:5] + ' %')
+    passAccRight.set(str(100 * analyzer.right_complete_pass_count / right_total_pass_count)[:5] + ' %')
 
-    shotsLeft.set(str(totalLeftShoots)+' ('+str(LeftWrongShoots)+')')
-    shotsRight.set(str(totalRightShoots)+' ('+str(RightWrongShoots)+')')
+    shotsLeft.set(str(left_total_shoot_count) + ' (' + str(analyzer.left_wrong_shoot_count) + ')')
+    shotsRight.set(str(right_total_shoot_count) + ' (' + str(analyzer.right_wrong_shoot_count) + ')')
 
-    shotAccLeft.set(str(100 * LeftCorrectShoots / totalLeftShoots)[:5]+' %')
-    shotAccRight.set(str(100 * RightCorrectShoots / totalRightShoots)[:5]+' %')
+    shotAccLeft.set(str(100 * analyzer.left_correct_shoot_count / left_total_shoot_count)[:5] + ' %')
+    shotAccRight.set(str(100 * analyzer.right_correct_shoot_count / right_total_shoot_count)[:5] + ' %')
 
     left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
 
@@ -108,47 +121,78 @@ def _open_log_file():
     clearancesLeft.set(str(left_clear))
     clearancesRight.set(str(right_clear))
 
-    savesLeft.set(str(left_saves))
-    savesRight.set(str(right_saves))
-
+    savesLeft.set(str(analyzer.left_saves_count))
+    savesRight.set(str(analyzer.right_saves_count))
 
 
 def draw_left_passes():
     draw_field()
-    for item in left_passes_pos:
+    for item in left_correct_pass_pos:
+        canvas.create_oval(
+            _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_bound * 0.01), fill='#211df7')
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#f2ee1f', width=3)
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#f2ee1f', width=3)
+        canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
+                           width=2, dash=(5, 3))
+
+    for item in left_wrong_pass_pos:
         canvas.create_oval(
             _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
                            x_bound * 0.01), fill='#ff0010')
         canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
                            y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
                            x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
-                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#1749ed', width=3)
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#f2ee1f', width=3)
         canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
                            y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
                            x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
-                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#1749ed', width=3)
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#f2ee1f', width=3)
         canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
                            x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
-                           width=2, dash=(5, 3))
+                           width=3, dash=(5, 3), fill='#d80003')
 
 
 def draw_right_passes():
     draw_field()
-    for item in right_passes_pos:
+    for item in right_correct_pass_pos:
+        canvas.create_oval(
+            _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_bound * 0.01), fill='#211df7')
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#f2ee1f', width=3)
+        canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
+                           x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#f2ee1f', width=3)
+        canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
+                           x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
+                           width=2, dash=(5, 3))
+
+    for item in right_wrong_pass_pos:
         canvas.create_oval(
             _create_circle(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
                            x_bound * 0.01), fill='#ff0010')
         canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
                            y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125,
                            x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
-                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#1749ed', width=3)
+                           y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125, fill='#f2ee1f', width=3)
         canvas.create_line(x_start + (item[1][0] + 53) * x_bound / 106 + x_bound * 0.0125,
                            y_start + (item[1][1] + 35) * y_bound / 70 - y_bound * 0.0125,
                            x_start + (item[1][0] + 53) * x_bound / 106 - x_bound * 0.0125,
-                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#1749ed', width=3)
+                           y_start + (item[1][1] + 35) * y_bound / 70 + y_bound * 0.0125, fill='#f2ee1f', width=3)
         canvas.create_line(x_start + (item[0][0] + 53) * x_bound / 106, y_start + (item[0][1] + 35) * y_bound / 70,
                            x_start + (item[1][0] + 53) * x_bound / 106, y_start + (item[1][1] + 35) * y_bound / 70,
-                           width=2, dash=(5, 3))
+                           width=3, dash=(5, 3), fill='#d80003')
 
 
 def _save_results():
@@ -295,7 +339,7 @@ ttk.Label(main_frame, text='Saves', width=MAX_LABEL_WIDTH, font=("Courier 10 Pit
 ttk.Label(main_frame, text='Clearances', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=10)
 ttk.Label(main_frame, text='Avg. Stamina', width=MAX_LABEL_WIDTH, font=("Courier 10 Pitch", 20), anchor='center').grid(column=0, row=11)
 
-#### Text Entries
+# Stats Menu Text Entries
 
 MAX_ENTRY_WIDTH = 14
 ENTRY_IPADY = 7
@@ -389,6 +433,9 @@ staminaLeftEntry.grid(column=1, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=
 staminaRight = tk.StringVar()
 staminaRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=staminaRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
 staminaRightEntry.grid(column=2, row=11,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
+
+
+# Graph Menu
 
 graphFrame = ttk.LabelFrame(graphTab, text='Graphical Visualization')
 graphFrame.grid(column=0, row=0, padx=8, pady=4)
