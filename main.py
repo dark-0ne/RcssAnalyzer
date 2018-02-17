@@ -57,7 +57,7 @@ def _open_log_file():
     pwd = os.getcwd()
 
     rcg_path = filedialog.askopenfilename(filetypes=(("Server Game Files", "*.rcg"), ("Log Extractor Output File",
-                                                                                     "*.xml"), ("all files", "*.*")))
+                                            "*.xml"), ("all files", "*.*")))
     if rcg_path == '':
         return
 
@@ -69,8 +69,11 @@ def _open_log_file():
     analyzer = Alz.Analyzer()
 
     if rcg_path.split('.')[-1] == 'rcg':
-        os.system(pwd + '/Log-Extractor ' + rcg_path + " tmp.xml")
-        analyzer.xmlPath = pwd + "/tmp.xml"
+        if not os.path.exists(pwd + "/XML"):
+            os.makedirs(pwd + "/XML")
+        xml_path = pwd + "/XML/" + rcg_path.split('/')[-1].split('.')[-2] + ".xml"
+        os.system(pwd + '/dep/Log-Extractor ' + rcg_path + " " + xml_path)
+        analyzer.xmlPath = xml_path
     else:
         analyzer.xmlPath = rcg_path
 
@@ -112,6 +115,11 @@ def _open_log_file():
 
     shotAccLeft.set(str(100 * analyzer.left_correct_shoot_count / left_total_shoot_count)[:5] + ' %')
     shotAccRight.set(str(100 * analyzer.right_correct_shoot_count / right_total_shoot_count)[:5] + ' %')
+
+    left_correct_pass_pos = analyzer.left_correct_pass_pos
+    right_correct_pass_pos = analyzer.right_correct_pass_pos
+    left_wrong_pass_pos = analyzer.left_wrong_pass_pos
+    right_wrong_pass_pos = analyzer.right_wrong_pass_pos
 
     left_opps, right_opps, left_clear, right_clear = analyzer.analyze_opportunities_and_clearances()
 
@@ -235,11 +243,11 @@ def _save_results():
 
 
 def _open_results():
-    open_restult_file = filedialog.askopenfilename(filetypes=(("Analyze Result File", "*.azr"), ("all files", "*.*"))
+    open_result_file = filedialog.askopenfilename(filetypes=(("Analyze Result File", "*.azr"), ("all files", "*.*"))
                                                    , initialdir="~/", title="Select Result File")
-    if open_restult_file == ():
+    if open_result_file == ():
         return
-    tree = Et.parse(open_restult_file)
+    tree = Et.parse(open_result_file)
     root = tree.getroot()
 
     teamNameLeft.set(root[0].find('Name').text)
@@ -268,7 +276,7 @@ def _open_results():
 
 
 def _show_about():
-    msg.showinfo('About', "Developed in KN2C® Robotics Lab 2018")
+    msg.showinfo('About', "Developed in KN2C Robotics Lab 2018")
 
 ###################
 # Procedural Code
@@ -352,7 +360,7 @@ teamNameLeftEntry.grid(column=1, row=1,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=
 
 teamNameRight = tk.StringVar()
 teamNameRightEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=teamNameRight, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
-teamNameRightEntry.grid(column=2, row=1,ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
+teamNameRightEntry.grid(column=2, row=1, ipady=ENTRY_IPADY, pady=ENTRY_PADY, padx=ENTRY_PADX)
 
 possessionLeft = tk.StringVar()
 possessionLeftEntry = ttk.Entry(main_frame, width=MAX_ENTRY_WIDTH, textvariable=possessionLeft, state='readonly', font=("Courier 10 Pitch", 20), justify='center')
@@ -447,7 +455,7 @@ canvas = tk.Canvas(graphFrame, width=canvas_width, height=canvas_height)
 canvas.pack()
 
 ttk.Label(graphFrame, text='Show passes for team: ', font=("Courier 10 Pitch", 16)).pack()
-ttk.Button(graphFrame, text='Left', command=draw_left_passes,).pack()
+ttk.Button(graphFrame, text='Left', command=draw_left_passes).pack()
 ttk.Button(graphFrame, text='Right', command=draw_right_passes).pack()
 ttk.Label(graphFrame, text='Red circles show passers,', font=("Courier 10 Pitch", 16)).pack()
 ttk.Label(graphFrame, text='Blue crosses are receivers.', font=("Courier 10 Pitch", 16)).pack()
